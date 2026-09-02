@@ -1,0 +1,986 @@
+
+
+<!DOCTYPE html>
+<html lang="zh-CN" data-default-color-scheme=auto>
+
+
+
+<head>
+  <meta charset="UTF-8">
+
+  <link rel="apple-touch-icon" sizes="76x76" href="/img/zzh_favicon.png">
+  <link rel="icon" href="/img/zzh_favicon.png">
+  
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, shrink-to-fit=no">
+  <meta http-equiv="x-ua-compatible" content="ie=edge">
+  
+  <meta name="theme-color" content="#2f4154">
+  <meta name="author" content="zhangzihang">
+  <meta name="keywords" content="k8s, scheduler, 调度器, 原理, 自定义插件, 开发实践">
+  
+    <meta name="description" content="详细介绍 Kubernetes 调度器的原理和自定义插件开发实践，帮助读者理解和掌握 Kubernetes 集群资源调度的机制。">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Kubernetes 调度器原理与自定义插件开发实践">
+<meta property="og:url" content="https://zzhx1.github.io/2024/05/15/k8s-scheduler/">
+<meta property="og:site_name" content="zhangzihang&#39;s blog">
+<meta property="og:description" content="详细介绍 Kubernetes 调度器的原理和自定义插件开发实践，帮助读者理解和掌握 Kubernetes 集群资源调度的机制。">
+<meta property="og:locale" content="zh_CN">
+<meta property="og:image" content="https://zzhx1.github.io/images/k8s-scheduler/image-20260202015836525.png">
+<meta property="og:image" content="https://zzhx1.github.io/images/k8s-scheduler/image-20260202015902141.png">
+<meta property="og:image" content="https://zzhx1.github.io/images/k8s-scheduler/image-20260202015909730.png">
+<meta property="og:image" content="https://zzhx1.github.io/images/k8s-scheduler/image-20260202020113094.png">
+<meta property="og:image" content="https://zzhx1.github.io/images/k8s-scheduler/image-20260202020144193.png">
+<meta property="article:published_time" content="2024-05-14T16:00:00.000Z">
+<meta property="article:modified_time" content="2025-11-14T16:00:00.000Z">
+<meta property="article:author" content="zhangzihang">
+<meta property="article:tag" content="k8s">
+<meta property="article:tag" content="scheduler">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:image" content="https://zzhx1.github.io/images/k8s-scheduler/image-20260202015836525.png">
+  
+  
+    <meta name="referrer" content="no-referrer-when-downgrade">
+  
+  
+  <title>Kubernetes 调度器原理与自定义插件开发实践 - zhangzihang&#39;s blog</title>
+
+  <link  rel="stylesheet" href="https://lib.baomitu.com/twitter-bootstrap/4.6.1/css/bootstrap.min.css" />
+
+
+
+  <link  rel="stylesheet" href="https://lib.baomitu.com/github-markdown-css/4.0.0/github-markdown.min.css" />
+
+  <link  rel="stylesheet" href="https://lib.baomitu.com/hint.css/2.7.0/hint.min.css" />
+
+  <link  rel="stylesheet" href="https://lib.baomitu.com/fancybox/3.5.7/jquery.fancybox.min.css" />
+
+
+
+<!-- 主题依赖的图标库，不要自行修改 -->
+<!-- Do not modify the link that theme dependent icons -->
+
+<link rel="stylesheet" href="//at.alicdn.com/t/c/font_1749284_5i9bdhy70f8.css">
+
+
+
+<link rel="stylesheet" href="//at.alicdn.com/t/c/font_1736178_k526ubmyhba.css">
+
+
+<link  rel="stylesheet" href="/css/main.css" />
+
+
+  <link id="highlight-css" rel="stylesheet" href="/css/highlight.css" />
+  
+    <link id="highlight-css-dark" rel="stylesheet" href="/css/highlight-dark.css" />
+  
+
+
+
+
+  <script id="fluid-configs">
+    var Fluid = window.Fluid || {};
+    Fluid.ctx = Object.assign({}, Fluid.ctx)
+    var CONFIG = {"hostname":"zzhx1.github.io","root":"/","version":"1.9.9","typing":{"enable":true,"typeSpeed":70,"cursorChar":"_","loop":false,"scope":["home"]},"anchorjs":{"enable":true,"element":"h1,h2,h3,h4,h5,h6","placement":"left","visible":"hover","icon":""},"progressbar":{"enable":true,"height_px":3,"color":"#29d","options":{"showSpinner":false,"trickleSpeed":100}},"code_language":{"enable":true,"default":"TEXT"},"copy_btn":true,"image_caption":{"enable":true},"image_zoom":{"enable":true,"img_url_replace":["",""]},"toc":{"enable":true,"expand_all":true,"placement":"right","headingSelector":"h1,h2,h3,h4,h5,h6","collapseDepth":0},"lazyload":{"enable":true,"loading_img":"/img/loading.gif","onlypost":false,"offset_factor":2},"web_analytics":{"enable":false,"follow_dnt":true,"baidu":null,"google":{"measurement_id":null},"tencent":{"sid":null,"cid":null},"leancloud":{"app_id":null,"app_key":null,"server_url":null,"path":"window.location.pathname","ignore_local":false},"openkounter":{"server_url":"https://open-kounter.mintimate.cn","path":"window.location.pathname","ignore_local":false},"umami":{"src":null,"website_id":null,"domains":null,"start_time":"2024-01-01T00:00:00.000Z","token":null,"api_server":null}},"search_path":"/search.xml","include_content_in_search":true};
+
+    if (CONFIG.web_analytics.follow_dnt) {
+      var dntVal = navigator.doNotTrack || window.doNotTrack || navigator.msDoNotTrack;
+      Fluid.ctx.dnt = dntVal && (dntVal.startsWith('1') || dntVal.startsWith('yes') || dntVal.startsWith('on'));
+    }
+  </script>
+  <script  src="/js/utils.js" ></script>
+  <script  src="/js/color-schema.js" ></script>
+  
+
+
+  
+<!-- hexo injector head_end start --><meta name="google-site-verification" content="mspInednFW1hhgphA_wKNGPrFamhQAiJk9IWXaWsT7Y"><!-- hexo injector head_end end --><meta name="generator" content="Hexo 8.1.1"></head>
+
+
+<body>
+  
+
+  <header>
+    
+
+<div class="header-inner" style="height: 70vh;">
+  <nav id="navbar" class="navbar fixed-top  navbar-expand-lg navbar-dark scrolling-navbar">
+  <div class="container">
+    <a class="navbar-brand" href="/">
+      <strong>zhangzihang&#39;s blog</strong>
+    </a>
+
+    <button id="navbar-toggler-btn" class="navbar-toggler" type="button" data-toggle="collapse"
+            data-target="#navbarSupportedContent"
+            aria-controls="navbarSupportedContent" aria-expanded="false" aria-label="Toggle navigation">
+      <div class="animated-icon"><span></span><span></span><span></span></div>
+    </button>
+
+    <!-- Collapsible content (desktop) -->
+    <div class="collapse navbar-collapse" id="navbarSupportedContent">
+      <ul class="navbar-nav ml-auto text-center">
+        
+          
+          
+          
+          
+            <li class="nav-item">
+              <a class="nav-link" href="/" target="_self">
+                <i class="iconfont icon-home-fill"></i>
+                <span>首页</span>
+              </a>
+            </li>
+          
+        
+          
+          
+          
+          
+            <li class="nav-item">
+              <a class="nav-link" href="/archives/" target="_self">
+                <i class="iconfont icon-archive-fill"></i>
+                <span>归档</span>
+              </a>
+            </li>
+          
+        
+          
+          
+          
+          
+            <li class="nav-item">
+              <a class="nav-link" href="/categories/" target="_self">
+                <i class="iconfont icon-category-fill"></i>
+                <span>分类</span>
+              </a>
+            </li>
+          
+        
+          
+          
+          
+          
+            <li class="nav-item">
+              <a class="nav-link" href="/tags/" target="_self">
+                <i class="iconfont icon-tags-fill"></i>
+                <span>标签</span>
+              </a>
+            </li>
+          
+        
+          
+          
+          
+          
+            <li class="nav-item">
+              <a class="nav-link" href="/about/" target="_self">
+                <i class="iconfont icon-user-fill"></i>
+                <span>关于</span>
+              </a>
+            </li>
+          
+        
+        
+          <li class="nav-item" id="search-btn">
+            <a class="nav-link" target="_self" href="javascript:;" data-toggle="modal" data-target="#modalSearch" aria-label="Search">
+              <i class="iconfont icon-search"></i>
+            </a>
+          </li>
+          
+        
+        
+          <li class="nav-item" id="color-toggle-btn">
+            <a class="nav-link" target="_self" href="javascript:;" aria-label="Color Toggle">
+              <i class="iconfont icon-dark" id="color-toggle-icon"></i>
+            </a>
+          </li>
+        
+      </ul>
+    </div>
+  </div>
+</nav>
+
+<!-- Mobile grid menu overlay -->
+<div id="mobile-grid-menu" class="d-lg-none">
+  <div class="mobile-grid-menu-inner">
+    <div class="container">
+      <div class="row">
+        
+          
+          
+          
+          
+            <div class="col-4 mobile-grid-cell">
+              <a href="/" target="_self">
+                <div class="mobile-grid-item">
+                  <i class="iconfont icon-home-fill"></i>
+                  <span>首页</span>
+                </div>
+              </a>
+            </div>
+          
+        
+          
+          
+          
+          
+            <div class="col-4 mobile-grid-cell">
+              <a href="/archives/" target="_self">
+                <div class="mobile-grid-item">
+                  <i class="iconfont icon-archive-fill"></i>
+                  <span>归档</span>
+                </div>
+              </a>
+            </div>
+          
+        
+          
+          
+          
+          
+            <div class="col-4 mobile-grid-cell">
+              <a href="/categories/" target="_self">
+                <div class="mobile-grid-item">
+                  <i class="iconfont icon-category-fill"></i>
+                  <span>分类</span>
+                </div>
+              </a>
+            </div>
+          
+        
+          
+          
+          
+          
+            <div class="col-4 mobile-grid-cell">
+              <a href="/tags/" target="_self">
+                <div class="mobile-grid-item">
+                  <i class="iconfont icon-tags-fill"></i>
+                  <span>标签</span>
+                </div>
+              </a>
+            </div>
+          
+        
+          
+          
+          
+          
+            <div class="col-4 mobile-grid-cell">
+              <a href="/about/" target="_self">
+                <div class="mobile-grid-item">
+                  <i class="iconfont icon-user-fill"></i>
+                  <span>关于</span>
+                </div>
+              </a>
+            </div>
+          
+        
+        
+          <div class="col-4 mobile-grid-cell" id="mobile-search-btn">
+            <a href="javascript:;" data-toggle="modal" data-target="#modalSearch" aria-label="Search">
+              <div class="mobile-grid-item">
+                <i class="iconfont icon-search"></i>
+                <span>搜索</span>
+              </div>
+            </a>
+          </div>
+        
+        
+          <div class="col-4 mobile-grid-cell" id="mobile-color-toggle-btn"
+               data-label-light="开灯"
+               data-label-dark="关灯">
+            <a href="javascript:;" aria-label="Color Toggle">
+              <div class="mobile-grid-item">
+                <i class="iconfont icon-dark" id="mobile-color-toggle-icon"></i>
+                <span id="mobile-color-toggle-label">关灯</span>
+              </div>
+            </a>
+          </div>
+        
+      </div>
+    </div>
+  </div>
+</div>
+
+  
+
+<div id="banner" class="banner" parallax=true
+     style="background: url('/img/default.png') no-repeat center center; background-size: cover;">
+  <div class="full-bg-img">
+    <div class="mask flex-center" style="background-color: rgba(0, 0, 0, 0.3)">
+      <div class="banner-text text-center fade-in-up">
+        <div class="h2">
+          
+            <span id="subtitle">Kubernetes 调度器原理与自定义插件开发实践</span>
+          
+        </div>
+
+        
+          
+  <div class="mt-3">
+    
+    
+      <span class="post-meta">
+        <i class="iconfont icon-date-fill" aria-hidden="true"></i>
+        <time datetime="2024-05-15 00:00" pubdate>
+          2024年5月15日 凌晨
+        </time>
+      </span>
+    
+  </div>
+
+  <div class="mt-1">
+    
+      <span class="post-meta mr-2">
+        <i class="iconfont icon-chart"></i>
+        
+          9.1k 字
+        
+      </span>
+    
+
+    
+      <span class="post-meta mr-2">
+        <i class="iconfont icon-clock-fill"></i>
+        
+        
+        
+          76 分钟
+        
+      </span>
+    
+
+    
+    
+  </div>
+
+
+        
+      </div>
+
+      
+    </div>
+  </div>
+</div>
+
+
+
+</div>
+
+  </header>
+
+  <main>
+    
+      
+
+<div class="container-fluid nopadding-x">
+  <div class="row nomargin-x">
+    <div class="side-col d-none d-lg-block col-lg-2">
+      
+
+    </div>
+
+    <div class="col-lg-8 nopadding-x-md">
+      <div class="container nopadding-x-md" id="board-ctn">
+        <div id="board">
+          <article class="post-content mx-auto">
+            <h1 id="seo-header">Kubernetes 调度器原理与自定义插件开发实践</h1>
+            
+            
+              <div class="markdown-body">
+                
+                <h2 id="一、背景介绍"><a href="#一、背景介绍" class="headerlink" title="一、背景介绍"></a>一、背景介绍</h2><p><code>kube-scheduler</code> 是 Kubernetes 集群的核心组件之一，主要负责集群资源的调度功能。它通过特定的调度算法和策略，将 Pod 分配到最优的工作节点（Node）上，从而实现集群资源的合理利用和充分分配，这也是我们选择使用 Kubernetes 的重要理由之一。</p>
+<p>默认情况下，<code>kube-scheduler</code> 提供的原生调度器能够满足绝大多数业务场景，确保 Pod 被分配到资源充足的节点运行。但在实际的生产环境中，业务逻辑往往更加复杂。例如，我们可能需要将某类 Pod 严格限制在特定的节点上运行，或者某些节点只能用于运行特定类型的应用。为了满足这些精细化的需求，我们需要深入理解 Kubernetes 的调度机制，并掌握编写自定义调度插件（Scheduling Plugins）的能力。</p>
+<h2 id="二、Kubernetes-Pod-部署流程"><a href="#二、Kubernetes-Pod-部署流程" class="headerlink" title="二、Kubernetes Pod 部署流程"></a>二、Kubernetes Pod 部署流程</h2><p><img src="/images/k8s-scheduler/image-20260202015836525.png" srcset="/img/loading.gif" lazyload alt="Pod 部署流程"></p>
+<p>Kubernetes 中 Pod 的总体部署流程如图所示，大致包含以下步骤：</p>
+<ol>
+<li><strong>提交请求</strong>：用户编写好 YAML 配置文件，向 <code>kube-apiserver</code> 提交创建请求。</li>
+<li><strong>准入控制</strong>：<code>kube-apiserver</code> 接收到请求后，首先通过 Webhooks 和 Controllers 进行一系列校验（准入控制）。</li>
+<li><strong>生成 Pod 对象</strong>：校验通过后，<code>kube-apiserver</code> 在集群中生成一个 Pod 对象。此时，该 Pod 的 <code>nodeName</code> 字段为空，状态（Phase）为 <code>Pending</code>。</li>
+<li><strong>调度过程</strong>：<ul>
+<li><code>kube-scheduler</code> 通过 Watch 机制监听到集群中出现了 <code>nodeName</code> 为空的 Pod，将其标记为“未调度”状态。</li>
+<li>调度器对该 Pod 执行一系列调度算法，包括过滤（Filter）和打分（Score）。</li>
+<li>选出最合适的节点后，调度器将该节点的名称绑定到 Pod 的 <code>spec.nodeName</code> 上，完成调度并更新数据到 API Server。</li>
+</ul>
+</li>
+<li><strong>节点执行</strong>：<ul>
+<li>目标节点上的 <code>kubelet</code> 监听到该 Pod 被分配给自己。</li>
+<li><code>kubelet</code> 开始执行容器创建、存储挂载、网络配置等操作。</li>
+<li>所有资源准备就绪后，Pod 状态更新为 <code>Running</code>，至此，一个完整的调度部署过程结束。</li>
+</ul>
+</li>
+</ol>
+<p><img src="/images/k8s-scheduler/image-20260202015902141.png" srcset="/img/loading.gif" lazyload alt="调度流程概览"></p>
+<h2 id="三、调度流程概览"><a href="#三、调度流程概览" class="headerlink" title="三、调度流程概览"></a>三、调度流程概览</h2><p><img src="/images/k8s-scheduler/image-20260202015909730.png" srcset="/img/loading.gif" lazyload alt="调度详细流程"></p>
+<p>调度器的核心工作流程涉及多个组件的协同，主要包括输入源、策略控制、数据缓存和核心算法流水线。</p>
+<h3 id="1-输入来源与配置"><a href="#1-输入来源与配置" class="headerlink" title="1. 输入来源与配置"></a>1. 输入来源与配置</h3><ul>
+<li><strong>FlagSet &#x2F; File</strong>：通过命令行参数或配置文件指定调度器参数。</li>
+<li><strong>ConfigMap</strong>：存储非敏感的配置数据，用于动态调整。</li>
+</ul>
+<h3 id="2-调度策略-Policy"><a href="#2-调度策略-Policy" class="headerlink" title="2. 调度策略 (Policy)"></a>2. 调度策略 (Policy)</h3><ul>
+<li><strong>过滤器 (Predicates)</strong>：快速筛选出符合硬性条件的节点。</li>
+<li><strong>打分器 (Priorities)</strong>：对筛选后的节点进行优先级打分。</li>
+<li><strong>扩展调度器 (Extenders)</strong>：支持外部自定义的 HTTP 回调式调度策略。</li>
+<li><strong>插件扩展点 (Plugins)</strong>：当前主流的 Scheduler Framework 扩展机制。</li>
+</ul>
+<h3 id="3-数据缓存-Informer"><a href="#3-数据缓存-Informer" class="headerlink" title="3. 数据缓存 (Informer)"></a>3. 数据缓存 (Informer)</h3><p>调度器启动时，通过 Kubernetes 的 Informer 机制（List+Watch）从 <code>kube-apiserver</code> 获取 Pods、Nodes、PV、PVC 等数据，并将这些数据预处理后存储在调度器的本地 Cache 中，以提高调度性能。</p>
+<h3 id="4-调度算法流水线-Algorithm"><a href="#4-调度算法流水线-Algorithm" class="headerlink" title="4. 调度算法流水线 (Algorithm)"></a>4. 调度算法流水线 (Algorithm)</h3><p>调度工作流主要由三个并发线程模型组成：</p>
+<ul>
+<li><p><strong>Scheduler Thread（调度主线程）</strong>：<br>核心调度逻辑在此执行，大致流程为：<code>PreFilter</code> -&gt; <code>Filter</code> -&gt; <code>PostFilter</code> -&gt; <code>Score</code> -&gt; <code>Reserve</code>。</p>
+<ul>
+<li><strong>Filter</strong>：筛选符合 Pod Spec 要求的节点。</li>
+<li><strong>Score</strong>：对筛选出的节点进行打分排序。</li>
+<li><strong>Reserve</strong>：将 Pod 与最优节点的关联信息写入 NodeCache（内存态预占），让后续等待调度的 Pod 能感知到资源已被占用。</li>
+</ul>
+</li>
+<li><p><strong>Wait Thread（等待线程）</strong>：<br>用于处理需等待的关联资源。例如等待 PVC 对应的 PV 创建成功，或在 Gang 调度中等待关联 Pod 组一同就绪。此阶段会进行 Permit（许可）检查。</p>
+</li>
+<li><p><strong>Bind Thread（绑定线程）</strong>：<br>负责将 Pod 与 Node 的绑定关系持久化到 <code>kube-apiserver</code>。调度完成后，会更新 Scheduler Cache（如 Pod 和 Node 的缓存数据）。</p>
+</li>
+</ul>
+<h2 id="四、调度详细流程"><a href="#四、调度详细流程" class="headerlink" title="四、调度详细流程"></a>四、调度详细流程</h2><p><img src="/images/k8s-scheduler/image-20260202020113094.png" srcset="/img/loading.gif" lazyload alt="调度流水线"></p>
+<p>深入剖析 Scheduler Pipeline 的工作原理，我们可以看到更细致的队列管理和数据流转。</p>
+<h3 id="1-调度队列-SchedulingQueue"><a href="#1-调度队列-SchedulingQueue" class="headerlink" title="1. 调度队列 (SchedulingQueue)"></a>1. 调度队列 (SchedulingQueue)</h3><p>调度队列包含三个子队列：</p>
+<ul>
+<li><strong>activeQ（活跃队列）</strong>：<br>调度器启动时，所有待调度的 Pod 首先进入此队列。它是一个优先队列，按照 Pod 优先级进行排序出队。</li>
+<li><strong>backoffQ（退避队列）</strong>：<br>当 Pod 因暂时性原因（如资源短缺、调度冲突）调度失败，或调度过程中 Cache 发生变化时，会进入此队列。该队列采用<strong>指数退避</strong>策略（例如重试间隔依次为 1s, 2s, 4s, …, max 10s），避免在资源不可用时频繁无效重试。</li>
+<li><strong>unschedulableQ（不可调度队列）</strong>：<br>当 Pod 因持久性原因（如请求的资源总量超过集群上限）无法调度时进入此队列。通常需等待集群状态发生显著变化（如新节点加入、PV 释放）才会被移出。该队列每 30s 轮询一次，或者如果 Pod 停留超过 60s，也会被尝试重新移回 <code>activeQ</code>。</li>
+</ul>
+<h3 id="2-调度流水线执行逻辑"><a href="#2-调度流水线执行逻辑" class="headerlink" title="2. 调度流水线执行逻辑"></a>2. 调度流水线执行逻辑</h3><ul>
+<li><strong>采样与过滤</strong>：<br>在 Filter 阶段，如果集群节点规模巨大，调度器通过<strong>采样算法</strong>（配置比例）选取部分节点进行过滤和打分，而非全量遍历，从而提升效率。</li>
+<li><strong>容灾与分散</strong>：<br>为保证高可用，NodeCache 中的节点是按 Zone（可用区）分组的。在筛选节点时，调度器维护一个 <code>zoneIndex</code> 和 <code>nodeIndex</code>。<ul>
+<li><strong>逻辑</strong>：<code>zoneIndex</code> 从左向右轮询，<code>nodeIndex</code> 自增。即每次从不同的 Zone 中取一个 Node 进行判断。</li>
+<li><strong>目的</strong>：确保筛选出的候选节点在物理区域上足够分散，避免单点故障。</li>
+</ul>
+</li>
+<li><strong>预占与绑定</strong>：<br>当 Filter 和 Score 阶段选出最优节点（SelectHost）后，进入 <strong>Reserve</strong> 阶段。此时修改 Pod 在 PodCache 中的状态为 <code>Assumed</code>（内存预占）。随后进入 <strong>Bind</strong> 阶段，调用 API Server 将 <code>nodeName</code> 持久化到 etcd。只有当 Informer 监听到持久化成功的数据后，Pod 状态才会转变为 <code>Added</code>。</li>
+</ul>
+<h2 id="五、K8s-自定义调度插件扩展点"><a href="#五、K8s-自定义调度插件扩展点" class="headerlink" title="五、K8s 自定义调度插件扩展点"></a>五、K8s 自定义调度插件扩展点</h2><p>Kubernetes 推出了 <strong>Scheduling Framework</strong>，将调度过程定义为架构良好的“扩展点”（Extension Points）。用户只需实现特定接口（Interface）并注册到对应的扩展点，即可在不修改核心代码的情况下定制调度逻辑。</p>
+<p><img src="/images/k8s-scheduler/image-20260202020144193.png" srcset="/img/loading.gif" lazyload alt="K8s 自定义调度插件扩展点"></p>
+<p>一个完整的调度周期分为 <strong>Scheduling Cycle</strong>（调度周期，纯内存操作）和 <strong>Binding Cycle</strong>（绑定周期，涉及外部调用）。主要扩展点如下：</p>
+<ol>
+<li><strong>QueueSort</strong>：决定 Pod 在 <code>activeQ</code> 中的排序规则（即优先级）。同一时刻只能启用一个 Sort 插件。</li>
+<li><strong>Pre-filter</strong>：调度前的预处理，可检查集群或 Pod 的前置条件。若返回 Error，调度终止。</li>
+<li><strong>Filter</strong>：<strong>核心扩展点</strong>。用于过滤不符合要求的节点。任何一个 Filter 插件返回失败，该节点即被排除。</li>
+<li><strong>Post-filter</strong>：通知型扩展点。通常用于处理 Filter 失败后的逻辑（如触发抢占 Preemption）。</li>
+<li><strong>Scoring</strong>：<strong>核心扩展点</strong>。对 Filter 后的节点进行打分。</li>
+<li><strong>Normalize scoring</strong>：在最终排序前，对分值进行归一化处理或修正。</li>
+<li><strong>Reserve</strong>：通知型扩展点。在绑定前锁定资源，防止资源超卖。</li>
+<li><strong>Permit</strong>：用于阻止或延迟绑定。支持 Approve（批准）、Deny（拒绝）或 Wait（等待）三种操作（常用于 Gang 调度）。</li>
+<li><strong>Pre-bind</strong>：绑定前的执行逻辑，例如挂载网络卷。</li>
+<li><strong>Bind</strong>：<strong>核心扩展点</strong>。执行真正的绑定操作（将 Pod 绑定到 Node）。</li>
+<li><strong>Post-bind</strong>：绑定成功后的通知，常用于资源清理。</li>
+<li><strong>Unreserve</strong>：若在 Reserve 之后绑定失败，触发此扩展点以释放预占资源。</li>
+</ol>
+<p><strong>开发提示</strong>：</p>
+<ul>
+<li>一个插件（Plugin）可以同时实现多个扩展点接口（如既实现 Filter 又实现 Score）。</li>
+<li>这些插件基于 Go Plugin 机制，通常需要在编译阶段静态链接到调度器二进制文件中。</li>
+<li>源码接口定义位于：<code>pkg/scheduler/framework/v1alpha1/interface.go</code>。</li>
+</ul>
+<h2 id="六、实践：编写一个简单的-HelloWorld-插件"><a href="#六、实践：编写一个简单的-HelloWorld-插件" class="headerlink" title="六、实践：编写一个简单的 HelloWorld 插件"></a>六、实践：编写一个简单的 HelloWorld 插件</h2><p>本示例将开发一个简单的调度插件 <code>helloworld</code>，其逻辑是：<strong>强制将 Pod 调度到名称为 <code>k8s-node1</code> 的节点上</strong>，否则调度失败。</p>
+<p>此示例主要演示插件的注册与部署流程（In-Tree 模式）。</p>
+<h3 id="1-编写插件源码"><a href="#1-编写插件源码" class="headerlink" title="1. 编写插件源码"></a>1. 编写插件源码</h3><p>在 Kubernetes 源码目录 <code>pkg/scheduler/framework/plugins</code> 下创建 <code>helloworld</code> 文件夹，并新建 <code>helloworld.go</code>：</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br></pre></td><td class="code"><pre><code class="hljs go"><span class="hljs-keyword">package</span> helloworld<br><br><span class="hljs-keyword">import</span> (<br>    <span class="hljs-string">&quot;context&quot;</span><br>    v1 <span class="hljs-string">&quot;k8s.io/api/core/v1&quot;</span><br>    <span class="hljs-string">&quot;k8s.io/apimachinery/pkg/runtime&quot;</span><br>    <span class="hljs-string">&quot;k8s.io/kubernetes/pkg/scheduler/framework&quot;</span><br>)<br><br><span class="hljs-keyword">const</span> (<br>    Name           = <span class="hljs-string">&quot;helloWorld&quot;</span><br>    targetNodeName = <span class="hljs-string">&quot;k8s-node1&quot;</span><br>)<br><br><span class="hljs-keyword">type</span> helloWorld <span class="hljs-keyword">struct</span>&#123;&#125;<br><br><span class="hljs-comment">// 确保 helloWorld 实现了 FilterPlugin 接口</span><br><span class="hljs-keyword">var</span> _ framework.FilterPlugin = &amp;helloWorld&#123;&#125;<br><br><span class="hljs-function"><span class="hljs-keyword">func</span> <span class="hljs-params">(f *helloWorld)</span></span> Name() <span class="hljs-type">string</span> &#123;<br>    <span class="hljs-keyword">return</span> Name<br>&#125;<br><br><span class="hljs-comment">// 核心逻辑：只允许调度到 targetNodeName</span><br><span class="hljs-function"><span class="hljs-keyword">func</span> <span class="hljs-params">(f *helloWorld)</span></span> Filter(ctx context.Context, _ *framework.CycleState, pod *v1.Pod, nodeInfo *framework.NodeInfo) *framework.Status &#123;<br>    <span class="hljs-keyword">if</span> nodeInfo.Node().Name == targetNodeName &#123;<br>        <span class="hljs-keyword">return</span> <span class="hljs-literal">nil</span> <br>    &#125;<br>    <span class="hljs-keyword">return</span> framework.NewStatus(framework.Unschedulable, <span class="hljs-string">&quot;Pod can only be scheduled to the specific node: &quot;</span>+targetNodeName)<br>&#125;<br><br><span class="hljs-function"><span class="hljs-keyword">func</span> <span class="hljs-title">New</span><span class="hljs-params">(ctx context.Context, _ runtime.Object, _ framework.Handle)</span></span> (framework.Plugin, <span class="hljs-type">error</span>) &#123;<br>    <span class="hljs-keyword">return</span> &amp;helloWorld&#123;&#125;, <span class="hljs-literal">nil</span><br>&#125;<br></code></pre></td></tr></table></figure>
+
+<h3 id="2-注册插件"><a href="#2-注册插件" class="headerlink" title="2. 注册插件"></a>2. 注册插件</h3><p>修改 <code>pkg/scheduler/framework/plugins/registry.go</code> 文件，将插件注册到调度器注册表中：</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br></pre></td><td class="code"><pre><code class="hljs go"><span class="hljs-keyword">import</span>(<br>    ...        <br>    <span class="hljs-string">&quot;k8s.io/kubernetes/pkg/scheduler/framework/plugins/helloworld&quot;</span> <span class="hljs-comment">// 引入包</span><br>    ...<br>)<br><br><span class="hljs-function"><span class="hljs-keyword">func</span> <span class="hljs-title">NewInTreeRegistry</span><span class="hljs-params">()</span></span> runtime.Registry &#123;<br>    ...<br>    registry := runtime.Registry&#123;<br>        ...        <br>        helloworld.Name: helloworld.New, <span class="hljs-comment">// 注册插件</span><br>    &#125;<br>    <span class="hljs-keyword">return</span> registry<br>&#125;<br></code></pre></td></tr></table></figure>
+
+<h3 id="3-编译与构建镜像"><a href="#3-编译与构建镜像" class="headerlink" title="3. 编译与构建镜像"></a>3. 编译与构建镜像</h3><p>你需要具备 Kubernetes 源码编译环境。</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br></pre></td><td class="code"><pre><code class="hljs bash"><span class="hljs-comment"># 切换到 k8s 源码目录并编译 kube-scheduler</span><br><span class="hljs-built_in">cd</span> <span class="hljs-variable">$GOPATH</span>/src/k8s.io/kubernetes<br>make WHAT=cmd/kube-scheduler<br><br><span class="hljs-comment"># 编写 Dockerfile</span><br><span class="hljs-built_in">cat</span> &lt;&lt;<span class="hljs-string">EOF &gt; Dockerfile</span><br><span class="hljs-string">FROM busybox</span><br><span class="hljs-string">ADD ./_output/local/bin/linux/amd64/kube-scheduler /usr/local/bin/kube-scheduler</span><br><span class="hljs-string">EOF</span><br><br><span class="hljs-comment"># 构建并推送镜像 (请替换为你自己的镜像仓库地址)</span><br>docker build -t registry.cn-hangzhou.aliyuncs.com/zzhxxx/helloworld-scheduler:1.0 .<br>docker push registry.cn-hangzhou.aliyuncs.com/zzhxxx/helloworld-scheduler:1.0<br></code></pre></td></tr></table></figure>
+
+<h3 id="4-部署自定义调度器"><a href="#4-部署自定义调度器" class="headerlink" title="4. 部署自定义调度器"></a>4. 部署自定义调度器</h3><p>编写 <code>hello-world-scheduler.yaml</code>，包含 RBAC 设置、ConfigMap 配置及 Deployment 部署。</p>
+<p><strong>关键点</strong>：在 ConfigMap 中通过 <code>KubeSchedulerConfiguration</code> 启用我们编写的 <code>helloWorld</code> 插件。</p>
+<figure class="highlight yaml"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br><span class="line">60</span><br><span class="line">61</span><br><span class="line">62</span><br><span class="line">63</span><br><span class="line">64</span><br><span class="line">65</span><br><span class="line">66</span><br><span class="line">67</span><br><span class="line">68</span><br><span class="line">69</span><br><span class="line">70</span><br><span class="line">71</span><br><span class="line">72</span><br><span class="line">73</span><br><span class="line">74</span><br><span class="line">75</span><br><span class="line">76</span><br><span class="line">77</span><br><span class="line">78</span><br><span class="line">79</span><br><span class="line">80</span><br><span class="line">81</span><br><span class="line">82</span><br><span class="line">83</span><br><span class="line">84</span><br><span class="line">85</span><br><span class="line">86</span><br><span class="line">87</span><br><span class="line">88</span><br><span class="line">89</span><br><span class="line">90</span><br><span class="line">91</span><br><span class="line">92</span><br><span class="line">93</span><br><span class="line">94</span><br><span class="line">95</span><br><span class="line">96</span><br><span class="line">97</span><br></pre></td><td class="code"><pre><code class="hljs yaml"><span class="hljs-attr">apiVersion:</span> <span class="hljs-string">v1</span><br><span class="hljs-attr">kind:</span> <span class="hljs-string">ServiceAccount</span><br><span class="hljs-attr">metadata:</span><br>  <span class="hljs-attr">name:</span> <span class="hljs-string">hello-world-scheduler</span><br>  <span class="hljs-attr">namespace:</span> <span class="hljs-string">kube-system</span><br><span class="hljs-meta">---</span><br><span class="hljs-attr">apiVersion:</span> <span class="hljs-string">rbac.authorization.k8s.io/v1</span><br><span class="hljs-attr">kind:</span> <span class="hljs-string">ClusterRoleBinding</span><br><span class="hljs-attr">metadata:</span><br>  <span class="hljs-attr">name:</span> <span class="hljs-string">hello-world-scheduler-as-kube-scheduler</span><br><span class="hljs-attr">subjects:</span><br><span class="hljs-bullet">-</span> <span class="hljs-attr">kind:</span> <span class="hljs-string">ServiceAccount</span><br>  <span class="hljs-attr">name:</span> <span class="hljs-string">hello-world-scheduler</span><br>  <span class="hljs-attr">namespace:</span> <span class="hljs-string">kube-system</span><br><span class="hljs-attr">roleRef:</span><br>  <span class="hljs-attr">kind:</span> <span class="hljs-string">ClusterRole</span><br>  <span class="hljs-attr">name:</span> <span class="hljs-string">system:kube-scheduler</span><br>  <span class="hljs-attr">apiGroup:</span> <span class="hljs-string">rbac.authorization.k8s.io</span><br><span class="hljs-meta">---</span><br><span class="hljs-attr">apiVersion:</span> <span class="hljs-string">v1</span><br><span class="hljs-attr">kind:</span> <span class="hljs-string">ConfigMap</span><br><span class="hljs-attr">metadata:</span><br>  <span class="hljs-attr">name:</span> <span class="hljs-string">hello-world-scheduler-config</span><br>  <span class="hljs-attr">namespace:</span> <span class="hljs-string">kube-system</span><br><span class="hljs-attr">data:</span><br>  <span class="hljs-attr">hello-world-scheduler-config.yaml:</span> <span class="hljs-string">|</span><br><span class="hljs-string">    apiVersion: kubescheduler.config.k8s.io/v1</span><br><span class="hljs-string">    kind: KubeSchedulerConfiguration</span><br><span class="hljs-string">    profiles:</span><br><span class="hljs-string">      - schedulerName: hello-world-scheduler # 自定义调度器名称</span><br><span class="hljs-string">        plugins:</span><br><span class="hljs-string">          filter: </span><br><span class="hljs-string">            enabled:</span><br><span class="hljs-string">              - name: helloWorld # 启用我们的插件</span><br><span class="hljs-string">        pluginConfig:</span><br><span class="hljs-string">          - name: helloworld</span><br><span class="hljs-string">            args:</span><br><span class="hljs-string">              customArgument: &quot;value&quot;</span><br><span class="hljs-string">    leaderElection:</span><br><span class="hljs-string">      leaderElect: false    </span><br><span class="hljs-string"></span><span class="hljs-meta">---</span><br><span class="hljs-comment"># 省略 ClusterRole 部分，通常与默认 scheduler 权限一致</span><br><span class="hljs-comment"># (请确保包含 nodes, pods, bindings 等资源的访问权限)</span><br><span class="hljs-attr">apiVersion:</span> <span class="hljs-string">rbac.authorization.k8s.io/v1</span><br><span class="hljs-attr">kind:</span> <span class="hljs-string">ClusterRole</span><br><span class="hljs-attr">metadata:</span><br>  <span class="hljs-attr">name:</span> <span class="hljs-string">hello-world-scheduler</span><br><span class="hljs-attr">rules:</span><br><span class="hljs-bullet">-</span> <span class="hljs-attr">apiGroups:</span> [<span class="hljs-string">&quot;&quot;</span>]<br>  <span class="hljs-attr">resources:</span> [<span class="hljs-string">&quot;nodes&quot;</span>, <span class="hljs-string">&quot;pods&quot;</span>, <span class="hljs-string">&quot;bindings&quot;</span>, <span class="hljs-string">&quot;pods/binding&quot;</span>, <span class="hljs-string">&quot;configmaps&quot;</span>]<br>  <span class="hljs-attr">verbs:</span> [<span class="hljs-string">&quot;get&quot;</span>, <span class="hljs-string">&quot;list&quot;</span>, <span class="hljs-string">&quot;watch&quot;</span>, <span class="hljs-string">&quot;create&quot;</span>, <span class="hljs-string">&quot;update&quot;</span>, <span class="hljs-string">&quot;patch&quot;</span>, <span class="hljs-string">&quot;delete&quot;</span>]<br><span class="hljs-comment"># ... (其他必要权限)</span><br><span class="hljs-meta">---</span><br><span class="hljs-attr">kind:</span> <span class="hljs-string">ClusterRoleBinding</span><br><span class="hljs-attr">apiVersion:</span> <span class="hljs-string">rbac.authorization.k8s.io/v1</span><br><span class="hljs-attr">metadata:</span><br>  <span class="hljs-attr">name:</span> <span class="hljs-string">hello-world-scheduler</span><br><span class="hljs-attr">roleRef:</span><br>  <span class="hljs-attr">apiGroup:</span> <span class="hljs-string">rbac.authorization.k8s.io</span><br>  <span class="hljs-attr">kind:</span> <span class="hljs-string">ClusterRole</span><br>  <span class="hljs-attr">name:</span> <span class="hljs-string">hello-world-scheduler</span><br><span class="hljs-attr">subjects:</span><br><span class="hljs-bullet">-</span> <span class="hljs-attr">kind:</span> <span class="hljs-string">ServiceAccount</span><br>  <span class="hljs-attr">name:</span> <span class="hljs-string">hello-world-scheduler</span><br>  <span class="hljs-attr">namespace:</span> <span class="hljs-string">kube-system</span><br><span class="hljs-meta">---</span><br><span class="hljs-attr">apiVersion:</span> <span class="hljs-string">apps/v1</span><br><span class="hljs-attr">kind:</span> <span class="hljs-string">Deployment</span><br><span class="hljs-attr">metadata:</span><br>  <span class="hljs-attr">name:</span> <span class="hljs-string">hello-world-scheduler</span><br>  <span class="hljs-attr">namespace:</span> <span class="hljs-string">kube-system</span><br>  <span class="hljs-attr">labels:</span><br>    <span class="hljs-attr">component:</span> <span class="hljs-string">scheduler</span><br><span class="hljs-attr">spec:</span><br>  <span class="hljs-attr">replicas:</span> <span class="hljs-number">1</span><br>  <span class="hljs-attr">selector:</span><br>    <span class="hljs-attr">matchLabels:</span><br>      <span class="hljs-attr">component:</span> <span class="hljs-string">scheduler</span><br>  <span class="hljs-attr">template:</span><br>    <span class="hljs-attr">metadata:</span><br>      <span class="hljs-attr">labels:</span><br>        <span class="hljs-attr">component:</span> <span class="hljs-string">scheduler</span><br>    <span class="hljs-attr">spec:</span><br>      <span class="hljs-attr">serviceAccountName:</span> <span class="hljs-string">hello-world-scheduler</span><br>      <span class="hljs-attr">containers:</span><br>      <span class="hljs-bullet">-</span> <span class="hljs-attr">name:</span> <span class="hljs-string">hello-world-scheduler</span><br>        <span class="hljs-attr">image:</span> <span class="hljs-string">registry.cn-hangzhou.aliyuncs.com/zzhxxx/helloworld-scheduler:1.0</span><br>        <span class="hljs-attr">command:</span><br>        <span class="hljs-bullet">-</span> <span class="hljs-string">/usr/local/bin/kube-scheduler</span><br>        <span class="hljs-bullet">-</span> <span class="hljs-string">--config=/etc/kubernetes/hello-world-scheduler/hello-world-scheduler-config.yaml</span><br>        <span class="hljs-attr">volumeMounts:</span><br>          <span class="hljs-bullet">-</span> <span class="hljs-attr">name:</span> <span class="hljs-string">config-volume</span><br>            <span class="hljs-attr">mountPath:</span> <span class="hljs-string">/etc/kubernetes/hello-world-scheduler</span><br>      <span class="hljs-attr">volumes:</span><br>        <span class="hljs-bullet">-</span> <span class="hljs-attr">name:</span> <span class="hljs-string">config-volume</span><br>          <span class="hljs-attr">configMap:</span><br>            <span class="hljs-attr">name:</span> <span class="hljs-string">hello-world-scheduler-config</span><br></code></pre></td></tr></table></figure>
+
+<h3 id="5-验证与测试"><a href="#5-验证与测试" class="headerlink" title="5. 验证与测试"></a>5. 验证与测试</h3><p><strong>应用配置：</strong></p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><code class="hljs bash">kubectl create -f hello-world-Scheduler.yaml<br></code></pre></td></tr></table></figure>
+
+<p><strong>检查运行状态：</strong></p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><code class="hljs bash">kubectl get pod -n kube-system -l component=scheduler<br><span class="hljs-comment"># 如遇问题，请查看日志</span><br>kubectl logs -n kube-system &lt;pod-name&gt;<br></code></pre></td></tr></table></figure>
+
+<p><strong>创建测试 Pod：</strong><br>创建一个指定使用 <code>hello-world-scheduler</code> 的 Pod。</p>
+<figure class="highlight yaml"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><code class="hljs yaml"><span class="hljs-attr">apiVersion:</span> <span class="hljs-string">v1</span><br><span class="hljs-attr">kind:</span> <span class="hljs-string">Pod</span><br><span class="hljs-attr">metadata:</span><br>  <span class="hljs-attr">name:</span> <span class="hljs-string">pod1</span><br><span class="hljs-attr">spec:</span><br>  <span class="hljs-attr">schedulerName:</span> <span class="hljs-string">hello-world-scheduler</span> <span class="hljs-comment"># 指定使用我们部署的调度器</span><br>  <span class="hljs-attr">containers:</span><br>  <span class="hljs-bullet">-</span> <span class="hljs-attr">name:</span> <span class="hljs-string">nginx</span><br>    <span class="hljs-attr">image:</span> <span class="hljs-string">nginx</span><br></code></pre></td></tr></table></figure>
+
+<p><strong>验证结果：</strong></p>
+<ol>
+<li><p><strong>成功调度</strong>：查看 Pod 事件，确认是否被调度到 <code>k8s-node1</code>。</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><code class="hljs bash">kubectl describe pod pod1<br></code></pre></td></tr></table></figure>
+<p>输出示例：</p>
+<blockquote>
+<p>Normal  Scheduled  …  hello-world-scheduler  Successfully assigned default&#x2F;pod1 to k8s-node1</p>
+</blockquote>
+</li>
+<li><p><strong>故障测试</strong>：</p>
+<ul>
+<li>将 <code>k8s-node1</code> 关机或标记为不可调度。</li>
+<li>删除并重建 <code>pod1</code>。</li>
+<li>观察 Pod 状态，应处于 <code>Pending</code> 状态，且 Event 提示调度失败（NodeNotReady 或类似原因），证明我们的 Filter 逻辑生效，确实只允许调度到该节点。</li>
+</ul>
+</li>
+</ol>
+<hr>
+<h3 id="reference："><a href="#reference：" class="headerlink" title="reference："></a>reference：</h3><blockquote>
+<p>k8s 官网：<br><a target="_blank" rel="noopener" href="https://kubernetes.io/zh-cn/docs/concepts/scheduling-eviction/">https://kubernetes.io/zh-cn/docs/concepts/scheduling-eviction/</a><br><a target="_blank" rel="noopener" href="https://kubernetes.io/zh-cn/docs/concepts/scheduling-eviction/scheduling-framework/">https://kubernetes.io/zh-cn/docs/concepts/scheduling-eviction/scheduling-framework/</a><br><a target="_blank" rel="noopener" href="https://kubernetes.io/zh-cn/docs/reference/scheduling/">https://kubernetes.io/zh-cn/docs/reference/scheduling/</a></p>
+</blockquote>
+<blockquote>
+<p>out-of-tree plugin 开发方式<br><a target="_blank" rel="noopener" href="https://github.com/kubernetes-sigs/scheduler-plugins/blob/master/doc/install.md#create-a-kubernetes-cluster">https://github.com/kubernetes-sigs/scheduler-plugins/blob/master/doc/install.md#create-a-kubernetes-cluster</a><br><a target="_blank" rel="noopener" href="https://github.com/kubernetes-sigs/scheduler-plugins">https://github.com/kubernetes-sigs/scheduler-plugins</a></p>
+</blockquote>
+<blockquote>
+<p> 实践博客：<br><a target="_blank" rel="noopener" href="https://arthurchiao.art/blog/k8s-scheduling-plugins-zh/">https://arthurchiao.art/blog/k8s-scheduling-plugins-zh/</a><br><a target="_blank" rel="noopener" href="https://isekiro.com/kubernetes%E7%BB%84%E4%BB%B6%E5%BC%80%E5%8F%91-%E8%87%AA%E5%AE%9A%E4%B9%89%E8%B0%83%E5%BA%A6%E5%99%A8%E4%B8%89/">https://isekiro.com/kubernetes%E7%BB%84%E4%BB%B6%E5%BC%80%E5%8F%91-%E8%87%AA%E5%AE%9A%E4%B9%89%E8%B0%83%E5%BA%A6%E5%99%A8%E4%B8%89/</a><br><a target="_blank" rel="noopener" href="https://zhuanlan.zhihu.com/p/113620537">https://zhuanlan.zhihu.com/p/113620537</a><br><a target="_blank" rel="noopener" href="http://team.jiunile.com/blog/2020/06/k8s-custom-scheduler.html">http://team.jiunile.com/blog/2020/06/k8s-custom-scheduler.html</a><br><a target="_blank" rel="noopener" href="https://blog.haohtml.com/archives/34665">https://blog.haohtml.com/archives/34665</a>  </p>
+</blockquote>
+
+                
+              </div>
+            
+            <hr/>
+            <div>
+              <div class="post-metas my-3">
+  
+    <div class="post-meta mr-3 d-flex align-items-center">
+      <i class="iconfont icon-category"></i>
+      
+
+<span class="category-chains">
+  
+  
+    
+      <span class="category-chain">
+        
+  <a href="/categories/%E6%8A%80%E6%9C%AF%E6%95%99%E7%A8%8B/" class="category-chain-item">技术教程</a>
+  
+  
+
+      </span>
+    
+  
+</span>
+
+    </div>
+  
+  
+    <div class="post-meta">
+      <i class="iconfont icon-tags"></i>
+      
+        <a href="/tags/k8s/" class="print-no-link">#k8s</a>
+      
+        <a href="/tags/scheduler/" class="print-no-link">#scheduler</a>
+      
+    </div>
+  
+</div>
+
+
+              
+  
+
+  <div class="license-box my-3">
+    <div class="license-title">
+      <div>Kubernetes 调度器原理与自定义插件开发实践</div>
+      <div>https://zzhx1.github.io/2024/05/15/k8s-scheduler/</div>
+    </div>
+    <div class="license-meta">
+      
+        <div class="license-meta-item">
+          <div>作者</div>
+          <div>zhangzihang</div>
+        </div>
+      
+      
+        <div class="license-meta-item license-meta-date">
+          <div>发布于</div>
+          <div>2024年5月15日</div>
+        </div>
+      
+      
+      
+        <div class="license-meta-item">
+          <div>许可协议</div>
+          <div>
+            
+              
+              
+                <a class="print-no-link" target="_blank" href="https://creativecommons.org/licenses/by-nc-sa/4.0/">
+                  <span class="hint--top hint--rounded" aria-label="BY - 署名">
+                    <i class="iconfont icon-cc-by"></i>
+                  </span>
+                </a>
+              
+                <a class="print-no-link" target="_blank" href="https://creativecommons.org/licenses/by-nc-sa/4.0/">
+                  <span class="hint--top hint--rounded" aria-label="NC - 非商业性使用">
+                    <i class="iconfont icon-cc-nc"></i>
+                  </span>
+                </a>
+              
+                <a class="print-no-link" target="_blank" href="https://creativecommons.org/licenses/by-nc-sa/4.0/">
+                  <span class="hint--top hint--rounded" aria-label="SA - 相同方式共享">
+                    <i class="iconfont icon-cc-sa"></i>
+                  </span>
+                </a>
+              
+            
+          </div>
+        </div>
+      
+    </div>
+    <div class="license-icon iconfont"></div>
+  </div>
+
+
+
+              
+                <div class="post-prevnext my-3">
+                  <article class="post-prev col-6">
+                    
+                    
+                      <a href="/2025/09/08/hello-world/" title="Clash-CLI 部署与跨机器代理使用全指南">
+                        <i class="iconfont icon-arrowleft"></i>
+                        <span class="hidden-mobile">Clash-CLI 部署与跨机器代理使用全指南</span>
+                        <span class="visible-mobile">上一篇</span>
+                      </a>
+                    
+                  </article>
+                  <article class="post-next col-6">
+                    
+                    
+                  </article>
+                </div>
+              
+            </div>
+
+            
+          </article>
+        </div>
+      </div>
+    </div>
+
+    <div class="side-col d-none d-lg-block col-lg-2">
+      
+  <aside class="sidebar" style="margin-left: -1rem">
+    <div id="toc">
+  <p class="toc-header">
+    <i class="iconfont icon-list"></i>
+    <span>目录</span>
+  </p>
+  <div class="toc-body" id="toc-body"></div>
+</div>
+
+
+
+  </aside>
+
+
+    </div>
+  </div>
+</div>
+
+
+
+
+
+  
+
+
+
+  
+
+
+
+  
+
+
+
+  
+
+
+
+  
+
+
+
+
+
+
+
+    
+
+    
+      <a id="scroll-top-button" aria-label="TOP" href="#" role="button">
+        <i class="iconfont icon-arrowup" aria-hidden="true"></i>
+      </a>
+    
+
+    
+      <div class="modal fade" id="modalSearch" tabindex="-1" role="dialog" aria-labelledby="ModalLabel"
+     aria-hidden="true">
+  <div class="modal-dialog modal-dialog-scrollable modal-lg" role="document">
+    <div class="modal-content">
+      <div class="modal-header text-center">
+        <h4 class="modal-title w-100 font-weight-bold">搜索</h4>
+        <button type="button" id="local-search-close" class="close" data-dismiss="modal" aria-label="Close">
+          <span aria-hidden="true">&times;</span>
+        </button>
+      </div>
+      <div class="modal-body mx-3">
+        <div class="md-form mb-5">
+          <input type="text" id="local-search-input" class="form-control validate">
+          <label data-error="x" data-success="v" for="local-search-input">关键词</label>
+        </div>
+        <div class="list-group" id="local-search-result"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+    
+
+    
+  </main>
+
+  <footer>
+    <div class="footer-inner">
+  
+    <div class="footer-content">
+       <p>&copy; 2026 zhangzihang All Rights Reserved</p> <a href="https://hexo.io" target="_blank" rel="nofollow noopener"><span>Hexo</span></a> <i class="iconfont icon-love"></i> <a href="https://github.com/fluid-dev/hexo-theme-fluid" target="_blank" rel="nofollow noopener"><span>Fluid</span></a> 
+    </div>
+  
+  
+    <div class="statistics">
+  
+  
+
+  
+    
+      <span id="busuanzi_container_site_pv" style="display: none">
+        总访问量 
+        <span id="busuanzi_value_site_pv"></span>
+         次
+      </span>
+    
+    
+      <span id="busuanzi_container_site_uv" style="display: none">
+        总访客数 
+        <span id="busuanzi_value_site_uv"></span>
+         人
+      </span>
+    
+    
+
+  
+
+</div>
+
+  
+  
+</div>
+
+  </footer>
+
+  <!-- Scripts -->
+  
+  <script  src="https://lib.baomitu.com/nprogress/0.2.0/nprogress.min.js" ></script>
+  <link  rel="stylesheet" href="https://lib.baomitu.com/nprogress/0.2.0/nprogress.min.css" />
+
+  <script>
+    NProgress.configure({"showSpinner":false,"trickleSpeed":100})
+    NProgress.start()
+    window.addEventListener('load', function() {
+      NProgress.done();
+    })
+  </script>
+
+
+<script  src="https://lib.baomitu.com/jquery/3.6.4/jquery.min.js" ></script>
+<script  src="https://lib.baomitu.com/twitter-bootstrap/4.6.1/js/bootstrap.min.js" ></script>
+<script  src="/js/events.js" ></script>
+<script  src="/js/plugins.js" ></script>
+
+
+
+
+
+  
+    <script  src="/js/img-lazyload.js" ></script>
+  
+
+
+
+
+  
+<script>
+  Fluid.utils.createScript('https://lib.baomitu.com/tocbot/4.20.1/tocbot.min.js', function() {
+    var toc = jQuery('#toc');
+    if (toc.length === 0 || !window.tocbot) { return; }
+    var boardCtn = jQuery('#board-ctn');
+    var boardTop = boardCtn.offset().top;
+
+    function isExpandAllEnabled() {
+      return CONFIG.toc && CONFIG.toc.expand_all === true;
+    }
+    function expandAllToc() {
+      if (!isExpandAllEnabled()) { return; }
+      jQuery('#toc-body .tocbot-is-collapsed').removeClass('tocbot-is-collapsed');
+    }
+    function updateTocToggle($li, $childList) {
+      var $toggle = $li.children('.toc-toggle');
+      if ($toggle.length === 0) { return; }
+      var collapsed = $childList.hasClass('tocbot-is-collapsed');
+      $toggle
+        .toggleClass('toc-toggle-collapsed', collapsed)
+        .toggleClass('toc-toggle-expanded', !collapsed);
+    }
+    function bindTocToggle() {
+      if (!isExpandAllEnabled()) { return; }
+      jQuery('#toc-body .toc-list-item').each(function() {
+        var $li = jQuery(this);
+        var $childList = $li.children('ol');
+        if ($childList.length === 0) {
+          if ($li.children('.toc-toggle').length === 0) {
+            $li.prepend('<span class="toc-toggle toc-toggle-placeholder" aria-hidden="true">›</span>');
+          }
+          return;
+        }
+
+        if ($li.children('.toc-toggle').length === 0) {
+          $li.prepend('<span class="toc-toggle toc-toggle-expanded" aria-hidden="true">›</span>');
+        }
+        updateTocToggle($li, $childList);
+      });
+      jQuery('#toc-body').off('click.tocToggle').on('click.tocToggle', '.toc-toggle', function(e) {
+        e.preventDefault();
+        e.stopPropagation();
+        var $li = jQuery(this).parent('.toc-list-item');
+        var $childList = $li.children('ol');
+        if ($childList.length === 0) { return; }
+        $childList.toggleClass('tocbot-is-collapsed');
+        updateTocToggle($li, $childList);
+      });
+      if (!window.__tocToggleObserver) {
+        window.__tocToggleObserver = new MutationObserver(function(mutations) {
+          mutations.forEach(function(mutation) {
+            if (mutation.type !== 'attributes' || mutation.attributeName !== 'class') { return; }
+            var $list = jQuery(mutation.target);
+            var $li = $list.parent('.toc-list-item');
+            if ($li.length === 0) { return; }
+            updateTocToggle($li, $list);
+          });
+        });
+        jQuery('#toc-body ol').each(function() {
+          window.__tocToggleObserver.observe(this, { attributes: true });
+        });
+      }
+    }
+    var tocConfig = Object.assign({
+      tocSelector     : '#toc-body',
+      contentSelector : '.markdown-body',
+      linkClass       : 'tocbot-link',
+      activeLinkClass : 'tocbot-active-link',
+      listClass       : 'tocbot-list',
+      isCollapsedClass: 'tocbot-is-collapsed',
+      collapsibleClass: 'tocbot-is-collapsible',
+      scrollSmooth    : true,
+      includeTitleTags: true,
+      headingsOffset  : -boardTop,
+    }, CONFIG.toc);
+    if (isExpandAllEnabled()) {
+      tocConfig.collapseDepth = 6;
+    }
+    window.tocbot.init(tocConfig);
+    if (toc.find('.toc-list-item').length > 0) {
+      toc.css('visibility', 'visible');
+    }
+    expandAllToc();
+    bindTocToggle();
+
+    Fluid.events.registerRefreshCallback(function() {
+      if ('tocbot' in window) {
+        tocbot.refresh();
+        var toc = jQuery('#toc');
+        if (toc.length === 0 || !tocbot) {
+          return;
+        }
+        if (toc.find('.toc-list-item').length > 0) {
+          toc.css('visibility', 'visible');
+        }
+        expandAllToc();
+        bindTocToggle();
+      }
+    });
+  });
+</script>
+
+
+  <script src=https://lib.baomitu.com/clipboard.js/2.0.11/clipboard.min.js></script>
+
+  <script>Fluid.plugins.codeWidget();</script>
+
+
+  
+<script>
+  Fluid.utils.createScript('https://lib.baomitu.com/anchor-js/5.0.0/anchor.min.js', function() {
+    window.anchors.options = {
+      placement: CONFIG.anchorjs.placement,
+      visible  : CONFIG.anchorjs.visible
+    };
+    if (CONFIG.anchorjs.icon) {
+      window.anchors.options.icon = CONFIG.anchorjs.icon;
+    }
+    var el = (CONFIG.anchorjs.element || 'h1,h2,h3,h4,h5,h6').split(',');
+    var res = [];
+    for (var item of el) {
+      res.push('.markdown-body > ' + item.trim());
+    }
+    if (CONFIG.anchorjs.placement === 'left') {
+      window.anchors.options.class = 'anchorjs-link-left';
+    }
+    window.anchors.add(res.join(', '));
+
+    Fluid.events.registerRefreshCallback(function() {
+      if ('anchors' in window) {
+        anchors.removeAll();
+        var el = (CONFIG.anchorjs.element || 'h1,h2,h3,h4,h5,h6').split(',');
+        var res = [];
+        for (var item of el) {
+          res.push('.markdown-body > ' + item.trim());
+        }
+        if (CONFIG.anchorjs.placement === 'left') {
+          anchors.options.class = 'anchorjs-link-left';
+        }
+        anchors.add(res.join(', '));
+      }
+    });
+  });
+</script>
+
+
+  
+<script>
+  Fluid.utils.createScript('https://lib.baomitu.com/fancybox/3.5.7/jquery.fancybox.min.js', function() {
+    Fluid.plugins.fancyBox();
+  });
+</script>
+
+
+  <script>Fluid.plugins.imageCaption();</script>
+
+  <script  src="/js/local-search.js" ></script>
+
+  <script defer src="https://busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js" ></script>
+
+
+
+
+
+<!-- 主题的启动项，将它保持在最底部 -->
+<!-- the boot of the theme, keep it at the bottom -->
+<script  src="/js/boot.js" ></script>
+
+
+  
+
+  <noscript>
+    <div class="noscript-warning">博客在允许 JavaScript 运行的环境下浏览效果更佳</div>
+  </noscript>
+</body>
+</html>
